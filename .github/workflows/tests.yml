@@ -99,6 +99,10 @@ jobs:
             sleep 1
           done
           "$(brew --prefix)/bin/spotter" daemon status
-          expected="$(brew --prefix)/opt/spotter/bin/spotterd"
-          actual="$(brew services info spotter-agent/spotter/spotter --json | jq -r '.[0].command')"
-          [[ "$actual" == "$expected" ]]
+          service_json="$(brew services info spotter-agent/spotter/spotter --json)"
+          expected_command="SPOTTER_HOME=\"$HOME/.spotter\" $(brew --prefix)/opt/spotter/bin/spotterd"
+          jq -e \
+            --arg command "$expected_command" \
+            --arg working_dir "$HOME" \
+            '.[0].command == $command and .[0].working_dir == $working_dir' \
+            <<<"$service_json"
