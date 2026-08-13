@@ -20,7 +20,7 @@ class Spotter < Formula
 
   service do
     run opt_bin/"spotterd"
-    keep_alive true
+    keep_alive path: opt_bin/"spotterd"
     process_type :background
     working_dir Dir.home
     environment_variables SPOTTER_HOME: "#{Dir.home}/.spotter"
