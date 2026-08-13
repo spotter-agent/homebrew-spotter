@@ -133,11 +133,18 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Check out Spotter source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
-        with:
-          repository: spotter-agent/spotter
-          ref: ${{ steps.spotter-source.outputs.sha }}
-          path: spotter-source
+        id: spotter-checkout
+        shell: bash
+        env:
+          SPOTTER_SHA: ${{ steps.spotter-source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/spotter-source"
+          git init "$source"
+          git -C "$source" remote add origin https://github.com/spotter-agent/spotter.git
+          git -C "$source" fetch --depth=1 origin "$SPOTTER_SHA"
+          git -C "$source" checkout --detach FETCH_HEAD
+          echo "path=$source" >> "$GITHUB_OUTPUT"
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@df4b09108a1de9d6f995fe68f302b3f68bd6d2ef # 2026.07.20.1
@@ -158,5 +165,5 @@ jobs:
         shell: bash
         run: |
           "${{ steps.builder.outputs.python }}" scripts/lifecycle_smoke.py \
-            --spotter-source spotter-source \
+            --spotter-source "${{ steps.spotter-checkout.outputs.path }}" \
             --formula-template Formula/spotter.rb
