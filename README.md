@@ -71,7 +71,9 @@ install G1 → setup Codex → keep G1 daemon live → upgrade to G2
 It also checks that Codex files are unchanged by package installation, persisted integration/service
 paths contain no `Cellar` component, cached G1 Hooks cannot attach as G2, a removed executable does
 not enter a service retry loop, unrelated Codex Hooks survive teardown, and user config/journal/
-label/experiment/registry fixtures survive both uninstall routes.
+label/experiment/registry fixtures survive both uninstall routes. A long-lived fake Codex App
+Server remains alive throughout, proving the package lifecycle does not terminate a shared process
+it does not own.
 
 To reproduce the same fixture from sibling tap and Spotter checkouts on macOS:
 

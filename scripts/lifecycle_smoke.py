@@ -187,14 +187,20 @@ def _write_formula(path: Path, template: str, artifact: Path, version: str) -> N
 def _fake_codex(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        "#!/bin/sh\n"
-        'case "${1:-}" in\n'
-        "  --version) echo 'codex-fixture 1.0' ;;\n"
-        "  --help) echo '--remote' ;;\n"
-        "  app-server) echo '--listen' ;;\n"
-        "  plugin) exit 0 ;;\n"
-        "  *) exit 0 ;;\n"
-        "esac\n"
+        "#!/usr/bin/env python3\n"
+        "import signal\n"
+        "import sys\n"
+        "\n"
+        "args = sys.argv[1:]\n"
+        "if args == ['--version']:\n"
+        "    print('codex-fixture 1.0')\n"
+        "elif args == ['--help']:\n"
+        "    print('--remote')\n"
+        "elif args == ['app-server', '--help']:\n"
+        "    print('--listen')\n"
+        "elif args == ['app-server']:\n"
+        "    while True:\n"
+        "        signal.pause()\n"
     )
     path.chmod(0o755)
 
@@ -242,6 +248,17 @@ def _wait_for_exit(pid: int, *, timeout: float = 15.0) -> None:
             return
         time.sleep(0.2)
     raise LifecycleSmokeError(f"daemon pid {pid} survived package uninstall")
+
+
+def _terminate_fixture_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
 
 
 def _launchd_state(label: str) -> str:
@@ -356,8 +373,18 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
             "PATH": f"{fake_bin}:{prefix / 'bin'}:/usr/bin:/bin:/usr/sbin:/sbin",
             "HOMEBREW_NO_AUTO_UPDATE": "1",
         }
+        shared_app_server = subprocess.Popen(
+            [fake_bin / "codex", "app-server"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
         try:
+            _assert(
+                _process_exists(shared_app_server.pid),
+                "shared App Server fixture did not start",
+            )
             print("[fixture] build two immutable Spotter generations", flush=True)
             _fixture_source(spotter_source, fixture_repository)
             g1 = _build_generation(
@@ -397,6 +424,10 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
             _run([stable_cli, "setup", "codex"], env=env)
             g1_runtime = _wait_for_status(stable_cli, env)
             _assert(g1_runtime.version == G1, "setup did not start G1")
+            _assert(
+                _process_exists(shared_app_server.pid),
+                "setup terminated the shared App Server",
+            )
             manifest_path = spotter_home / "integrations/codex.json"
             manifest_g1 = json.loads(manifest_path.read_text())
             serialized_g1 = json.dumps(manifest_g1)
@@ -473,6 +504,10 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
             _assert(g2_runtime.version == G2, "reconcile did not start G2")
             _assert(g2_runtime.pid != g1_runtime.pid, "reconcile did not replace G1")
             _assert(not _process_exists(g1_runtime.pid), "G1 survived reconciliation")
+            _assert(
+                _process_exists(shared_app_server.pid),
+                "upgrade reconciliation terminated the shared App Server",
+            )
             manifest_g2 = json.loads(manifest_path.read_text())
             _assert(
                 manifest_g2["integration_generation"]
@@ -532,6 +567,10 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
                 _tree_fingerprint(durable) == durable_before,
                 "uninstall purged user data",
             )
+            _assert(
+                _process_exists(shared_app_server.pid),
+                "teardown-less uninstall terminated the shared App Server",
+            )
 
             print(
                 "[fixture] reinstall, repair idempotently, teardown, and uninstall cleanly",
@@ -565,8 +604,13 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
                 _tree_fingerprint(durable) == durable_before,
                 "clean removal purged user data",
             )
+            _assert(
+                _process_exists(shared_app_server.pid),
+                "teardown and uninstall terminated the shared App Server",
+            )
         finally:
             _cleanup(brew, QUALIFIED_FORMULA, registration, env)
+            _terminate_fixture_process(shared_app_server)
 
 
 def _parser() -> argparse.ArgumentParser:
