@@ -1,0 +1,66 @@
+name: Update Spotter Formula
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: update-spotter-formula
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    if: github.repository == 'spotter-agent/homebrew-spotter'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Test the updater
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Read the latest verified release
+        id: update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/update_formula.py
+
+      - name: Open or refresh the Formula update pull request
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.update.outputs.version }}
+        run: |
+          set -euo pipefail
+          branch="automation/spotter-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add Formula/spotter.rb
+          git commit -m "Update Spotter to ${VERSION}"
+
+          remote_sha="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)"
+          if [[ -n "$remote_sha" ]]; then
+            git push --force-with-lease="refs/heads/$branch:$remote_sha" origin "$branch"
+          else
+            git push --set-upstream origin "$branch"
+          fi
+
+          if [[ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')" ]]; then
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "Update Spotter to ${VERSION}" \
+              --body "Automated Formula source update from the verified Spotter ${VERSION} release. Runtime dependency resources require maintainer review when upstream dependencies change."
+          fi
+
+          # Pull requests created with GITHUB_TOKEN do not emit another pull_request event.
+          # Dispatch the test workflow explicitly so its checks still attach to this commit.
+          gh workflow run tests.yml --ref "$branch"
