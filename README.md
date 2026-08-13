@@ -37,10 +37,13 @@ data or edit Codex configuration.
 `vMAJOR.MINOR.PATCH` release in `spotter-agent/spotter`. The Formula records the release asset's
 SHA-256 and pins every Python runtime dependency as a separate resource.
 
-The hourly and manually dispatchable **Update Spotter Formula** workflow reads Spotter's published
-release manifest, validates its tag, artifact name, size, and digest against the GitHub Release, and
-opens a version-specific pull request when a newer release exists. It refuses drafts, prereleases,
-downgrades, same-version digest changes, and malformed release manifests.
+After Spotter publishes a verified release, its release workflow dispatches the exact tag to this
+tap's **Update Spotter Formula** workflow. The workflow reads that published release manifest,
+validates its tag, artifact name, size, and digest against the GitHub Release, and opens a
+version-specific pull request that updates the immutable source URL and checksum together. A
+maintainer can also dispatch the workflow manually with an exact `vMAJOR.MINOR.PATCH` tag. It
+refuses drafts, prereleases, downgrades, same-version digest changes, and malformed release
+manifests.
 
 To reproduce an update locally:
 

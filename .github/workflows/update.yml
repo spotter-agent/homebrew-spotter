@@ -1,9 +1,15 @@
 name: Update Spotter Formula
 
 on:
-  schedule:
-    - cron: "17 * * * *"
+  repository_dispatch:
+    types:
+      - spotter-release-published
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published Spotter release tag (vMAJOR.MINOR.PATCH)
+        required: true
+        type: string
 
 concurrency:
   group: update-spotter-formula
@@ -26,11 +32,19 @@ jobs:
       - name: Test the updater
         run: python3 -m unittest discover -s tests -v
 
-      - name: Read the latest verified release
+      - name: Read the dispatched verified release
         id: update
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/update_formula.py
+          RELEASE_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release tag must match vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          python3 scripts/update_formula.py \
+            --release-api "https://api.github.com/repos/spotter-agent/spotter/releases/tags/$RELEASE_TAG"
 
       - name: Open or refresh the Formula update pull request
         if: steps.update.outputs.changed == 'true'
