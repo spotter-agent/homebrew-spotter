@@ -3,8 +3,8 @@ class Spotter < Formula
 
   desc "Runtime trajectory supervision for coding agents"
   homepage "https://github.com/spotter-agent/spotter"
-  url "https://github.com/spotter-agent/spotter/releases/download/v0.0.5/spotter_agent-0.0.5.tar.gz"
-  sha256 "f6cfc708dc80f1cfdf56e32e50af7f309f89732fd97d5a626d80bdded17e49a5"
+  url "https://github.com/spotter-agent/spotter/releases/download/v0.0.6/spotter_agent-0.0.6.tar.gz"
+  sha256 "526f034ff28f68a3cf454677f3477a919e58aaa533d745431d7ea47e5163e8a3"
   license "MIT"
 
   depends_on "python@3.14"
