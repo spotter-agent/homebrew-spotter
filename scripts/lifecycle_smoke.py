@@ -193,7 +193,7 @@ def _fake_codex(path: Path) -> None:
         "\n"
         "args = sys.argv[1:]\n"
         "if args == ['--version']:\n"
-        "    print('codex-fixture 1.0')\n"
+        "    print('codex-cli 0.147.0')\n"
         "elif args == ['--help']:\n"
         "    print('--remote')\n"
         "elif args == ['app-server', '--help']:\n"
@@ -209,7 +209,7 @@ def _runtime_status(spotter: Path, env: Mapping[str, str]) -> RuntimeStatus:
     output = _run([spotter, "daemon", "status"], env=env).stdout.strip()
     match = re.search(
         r"healthy \(pid=(?P<pid>\d+), protocol=\d+, version=(?P<version>[^,]+), "
-        r"build=(?P<build>[^)]+)\)",
+        r"build=(?P<build>[^,)]+)(?:, [^)]*)?\)",
         output,
     )
     if match is None:
@@ -484,7 +484,12 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
             )
             still_g1 = _runtime_status(stable_cli, env)
             _assert(
-                still_g1.build_id == g1_runtime.build_id, "G1 daemon masqueraded as G2"
+                still_g1.pid == g1_runtime.pid,
+                f"G1 daemon was replaced during upgrade: {g1_runtime} -> {still_g1}",
+            )
+            _assert(
+                still_g1.build_id == g1_runtime.build_id,
+                f"G1 daemon masqueraded as G2: {g1_runtime} -> {still_g1}",
             )
             journal_size = journal.stat().st_size
             code, stderr = _invoke_cached_hook(
