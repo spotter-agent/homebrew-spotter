@@ -193,7 +193,7 @@ def _fake_codex(path: Path) -> None:
         "\n"
         "args = sys.argv[1:]\n"
         "if args == ['--version']:\n"
-        "    print('codex-fixture 1.0')\n"
+        "    print('codex-cli 0.147.0')\n"
         "elif args == ['--help']:\n"
         "    print('--remote')\n"
         "elif args == ['app-server', '--help']:\n"
