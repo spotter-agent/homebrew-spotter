@@ -209,7 +209,7 @@ def _runtime_status(spotter: Path, env: Mapping[str, str]) -> RuntimeStatus:
     output = _run([spotter, "daemon", "status"], env=env).stdout.strip()
     match = re.search(
         r"healthy \(pid=(?P<pid>\d+), protocol=\d+, version=(?P<version>[^,]+), "
-        r"build=(?P<build>[^)]+)\)",
+        r"build=(?P<build>[^,)]+)(?:, [^)]*)?\)",
         output,
     )
     if match is None:
