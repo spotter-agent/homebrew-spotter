@@ -61,9 +61,9 @@ contract.
 
 ## Lifecycle smoke
 
-The macOS lifecycle job builds two immutable local Spotter generations from the supplied source,
-publishes them through an isolated fixture tap, and exercises this path without relying on an old
-Cellar keg remaining present:
+The macOS and Linux lifecycle jobs build two immutable local Spotter generations from the supplied
+source, publish them through an isolated fixture tap, and exercise this path without relying on an
+old Cellar keg remaining present:
 
 ```text
 install G1 → setup Codex → keep G1 daemon live → upgrade to G2
@@ -88,9 +88,9 @@ python3 -m venv /tmp/spotter-lifecycle-venv
   --formula-template Formula/spotter.rb
 ```
 
-The harness refuses to replace an installed `spotter` executable or existing
-`dev.spotter.runtime` LaunchAgent and cleans up its isolated Formula, service, trust entry, and tap
-on success or failure.
+The harness refuses to replace an installed `spotter` executable or existing Spotter launchd or
+systemd user service and cleans up its isolated Formula, service, trust entry, and tap on success or
+failure.
 
 For coordinated cross-repository pull requests, CI resolves a same-named branch in
 `spotter-agent/spotter` to an exact commit before falling back to Spotter `main`. This lets the tap

@@ -266,6 +266,20 @@ def _launchd_state(label: str) -> str:
     return result.stdout if result.returncode == 0 else ""
 
 
+def _systemd_state() -> str:
+    result = _run(
+        [
+            "systemctl",
+            "--user",
+            "show",
+            "spotterd.service",
+            "--property=ActiveState,NRestarts,ExecMainPID",
+        ],
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
 def _hook_command(codex_home: Path) -> str:
     raw = json.loads((codex_home / "hooks.json").read_text())
     for group in raw["hooks"]["SessionStart"]:
@@ -309,9 +323,20 @@ def _cleanup(
     spotter = Path(_run([brew, "--prefix"], check=False).stdout.strip()) / "bin/spotter"
     if spotter.exists():
         _run([spotter, "teardown", "codex"], env=env, check=False)
-    _run(["launchctl", "bootout", f"gui/{os.getuid()}/{SERVICE_LABEL}"], check=False)
+    if sys.platform == "darwin":
+        _run(
+            ["launchctl", "bootout", f"gui/{os.getuid()}/{SERVICE_LABEL}"],
+            check=False,
+        )
+    else:
+        _run(
+            ["systemctl", "--user", "disable", "--now", "spotterd.service"],
+            check=False,
+        )
     if service_registration.exists():
         service_registration.unlink()
+    if sys.platform != "darwin":
+        _run(["systemctl", "--user", "daemon-reload"], check=False)
     _run([brew, "services", "stop", formula], check=False)
     if _run([brew, "list", "--versions", FIXTURE_FORMULA], check=False).stdout.strip():
         _run([brew, "uninstall", "--force", formula], check=False)
@@ -321,21 +346,37 @@ def _cleanup(
 
 def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
     brew_text = shutil.which("brew")
-    if sys.platform != "darwin" or brew_text is None:
+    if sys.platform not in {"darwin", "linux"} or brew_text is None:
         raise LifecycleSmokeError(
-            "the Homebrew lifecycle fixture requires macOS and brew"
+            "the Homebrew lifecycle fixture requires macOS/Linux and brew"
         )
     brew = Path(brew_text)
     prefix = Path(_run([brew, "--prefix"]).stdout.strip())
     stable_cli = prefix / "bin/spotter"
     stable_daemon = prefix / "bin/spotterd"
-    registration = Path.home() / "Library/LaunchAgents" / f"{SERVICE_LABEL}.plist"
+    if sys.platform == "darwin":
+        registration = (
+            Path.home() / "Library/LaunchAgents" / f"{SERVICE_LABEL}.plist"
+        )
+    else:
+        registration = Path.home() / ".config/systemd/user/spotterd.service"
+        systemd = _run(["systemctl", "--user", "show-environment"], check=False)
+        _assert(systemd.returncode == 0, "systemd user manager is unavailable")
     _assert(
         not stable_cli.exists() and not stable_daemon.exists(),
         "Spotter is already installed",
     )
     _assert(not registration.exists(), f"refusing to replace existing {registration}")
-    _assert(not _launchd_state(SERVICE_LABEL), f"{SERVICE_LABEL} is already loaded")
+    if sys.platform == "darwin":
+        _assert(
+            not _launchd_state(SERVICE_LABEL),
+            f"{SERVICE_LABEL} is already loaded",
+        )
+    else:
+        active = _run(
+            ["systemctl", "--user", "is-active", "spotterd.service"], check=False
+        )
+        _assert(active.returncode != 0, "spotterd.service is already active")
 
     with tempfile.TemporaryDirectory(prefix="spotter-homebrew-lifecycle-") as temporary:
         root = Path(temporary)
@@ -553,18 +594,34 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
                 "executables remain",
             )
             _wait_for_exit(g2_runtime.pid)
-            first_state = _launchd_state(SERVICE_LABEL)
-            time.sleep(2.5)
-            second_state = _launchd_state(SERVICE_LABEL)
-            _assert(
-                "pid =" not in second_state, "launchd kept the removed daemon alive"
+            first_state = (
+                _launchd_state(SERVICE_LABEL)
+                if sys.platform == "darwin"
+                else _systemd_state()
             )
-            first_runs = re.search(r"runs = (\d+)", first_state)
-            second_runs = re.search(r"runs = (\d+)", second_state)
+            time.sleep(2.5)
+            second_state = (
+                _launchd_state(SERVICE_LABEL)
+                if sys.platform == "darwin"
+                else _systemd_state()
+            )
+            if sys.platform == "darwin":
+                _assert(
+                    "pid =" not in second_state, "launchd kept the removed daemon alive"
+                )
+                run_pattern = r"runs = (\d+)"
+            else:
+                _assert(
+                    "ActiveState=inactive" in second_state,
+                    "systemd kept the removed daemon active",
+                )
+                run_pattern = r"NRestarts=(\d+)"
+            first_runs = re.search(run_pattern, first_state)
+            second_runs = re.search(run_pattern, second_state)
             if first_runs is not None and second_runs is not None:
                 _assert(
                     first_runs[1] == second_runs[1],
-                    "launchd retried a removed executable",
+                    "service manager retried a removed executable",
                 )
             code, _ = _invoke_cached_hook(cached_g2_hook, env, "after-uninstall")
             _assert(code == 0, "dangling integration did not fail open")
