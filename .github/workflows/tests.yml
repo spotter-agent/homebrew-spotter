@@ -112,6 +112,7 @@ jobs:
   lifecycle-smoke:
     if: github.repository == 'spotter-agent/homebrew-spotter'
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-26, ubuntu-latest]
     runs-on: ${{ matrix.os }}
