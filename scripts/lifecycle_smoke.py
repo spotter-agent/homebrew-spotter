@@ -687,6 +687,16 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
                     check=False,
                 )
                 print(service.stdout or service.stderr, file=sys.stderr)
+                journal = _run(
+                    [
+                        "journalctl",
+                        "--user-unit",
+                        "spotterd.service",
+                        "--no-pager",
+                    ],
+                    check=False,
+                )
+                print(journal.stdout or journal.stderr, file=sys.stderr)
             raise
         finally:
             _cleanup(brew, QUALIFIED_FORMULA, registration, env)
