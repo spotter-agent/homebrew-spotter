@@ -670,6 +670,24 @@ def lifecycle_smoke(spotter_source: Path, formula_template: Path) -> None:
                 _process_exists(shared_app_server.pid),
                 "teardown and uninstall terminated the shared App Server",
             )
+        except Exception:
+            daemon_log = spotter_home / "logs/spotterd.log"
+            if daemon_log.exists():
+                print("[fixture] spotterd log after failure", file=sys.stderr)
+                print(daemon_log.read_text(errors="replace"), file=sys.stderr)
+            if sys.platform == "linux":
+                service = _run(
+                    [
+                        "systemctl",
+                        "--user",
+                        "status",
+                        "spotterd.service",
+                        "--no-pager",
+                    ],
+                    check=False,
+                )
+                print(service.stdout or service.stderr, file=sys.stderr)
+            raise
         finally:
             _cleanup(brew, QUALIFIED_FORMULA, registration, env)
             _terminate_fixture_process(shared_app_server)
