@@ -241,7 +241,7 @@ def _process_exists(pid: int) -> bool:
     return True
 
 
-def _wait_for_exit(pid: int, *, timeout: float = 15.0) -> None:
+def _wait_for_exit(pid: int, *, timeout: float = 20.0) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not _process_exists(pid):
