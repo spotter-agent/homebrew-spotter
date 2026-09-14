@@ -126,7 +126,7 @@ jobs:
         id: spotter-source
         shell: bash
         env:
-          CANDIDATE_REF: ${{ github.head_ref || 'main' }}
+          CANDIDATE_REF: fix/linux-systemd-path-values
         run: |
           set -euo pipefail
           remote=https://github.com/spotter-agent/spotter.git
